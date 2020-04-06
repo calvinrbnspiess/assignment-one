@@ -1,3 +1,16 @@
+@keyframes enterScene {
+  from {
+    transform-origin: right bottom;
+    transform: scale(0);
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .cms-widget {
   position: fixed;
   right: 0;
@@ -10,6 +23,9 @@
   flex-direction: column;
   font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  opacity: 0;
+  animation: enterScene 180ms forwards;
+  animation-delay: 200ms;
 }
 
 .overlay {
