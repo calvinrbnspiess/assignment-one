@@ -35,6 +35,9 @@
   color: #333;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   margin-bottom: 1em;
+  opacity: 0;
+  animation: enterScene 180ms forwards;
+  animation-delay: 380ms;
 }
 
 .edit-button {
