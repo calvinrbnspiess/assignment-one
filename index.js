@@ -4,17 +4,13 @@
 // Plan:
 //  - Generative vdom representation of the site (snapshot) ✅
 //  - Use this representation to detect changes in the HTML ✅
-//  - Add some sort of "edit"-button that will give (🚫) each dom-element the attribute contenteditable="true" (it will not work well enough to give it just to the body) (✅)
+//  - Add some sort of "edit"-button that will give (✅) each dom-element the attribute contenteditable="true" (it will not work well enough to give it just to the body) (✅)
 //  - use the structure and some events to save changes to the LocalStorage ✅
 //  - On Revisit: Load from LocalStorage if snapshot matches the structure ✅
-//  - Edit Mode Indicator
+//  - Add key handler for ESC to exit edit mode
+//  - Add visual border to editable elements instead of ugly outline :) (not a necessary feature at all) ✅
+//  - Edit Mode Indicator ✅
 //  - Code cleanup, minor improvements
-
-const sleep = (ms) => {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-};
 
 const loadWidget = () => {
   const container = document.createElement("div");
@@ -54,15 +50,19 @@ const loadWidget = () => {
   document.body.appendChild(container);
 
   window.overlay = overlay;
+  window.editButton = editButton;
 
   return overlay;
 };
+
+const isTextElement = (element) =>
+  element.children.length === 0 && !element.shadowRoot;
 
 // generate a virtual DOM
 const generateVirtualDOM = async (element, layer = 0) => {
   let children = [];
 
-  if (element.tagName === undefined) {
+  if (element.tagName === undefined || element.shadowRoot) {
     return;
   }
 
@@ -92,8 +92,28 @@ const printLayer = (vdom, layer = 1) => {
 
 // make an element and its children contenteditable
 const makeEditable = (element) => {
-  if (element.children.length === 0) {
+  if (isTextElement(element)) {
     element.setAttribute("contenteditable", true);
+
+    const {
+      marginTop,
+      marginRight,
+      marginBottom,
+      marginLeft,
+    } = window.getComputedStyle(element);
+
+    console.log(marginTop, marginLeft, marginBottom, marginRight);
+
+    const newMargin = `${+marginTop.replace("px", "") + 5}px ${
+      +marginRight.replace("px", "") + 5
+    }px ${+marginBottom.replace("px", "") + 5}px ${
+      +marginLeft.replace("px", "") + 5
+    }px`;
+
+    element.setAttribute(
+      "style",
+      `outline: 2px dashed grey; margin: ${newMargin}; transition: margin .2s ease`
+    );
     element.addEventListener("input", async (event) => {
       window.overlay.innerText = "Saving ...";
       console.log(
@@ -108,6 +128,16 @@ const makeEditable = (element) => {
   }
 
   Array.from(element.children).forEach(makeEditable);
+};
+
+const disableEditable = (element) => {
+  if (isTextElement(element)) {
+    element.setAttribute("contenteditable", false);
+    element.setAttribute("style", "transition: margin .2s ease");
+    return;
+  }
+
+  Array.from(element.children).forEach(disableEditable);
 };
 
 const readSnapshot = (vdom, element) => {
@@ -132,6 +162,8 @@ const vdomFilterText = (vdom) => {
 
 const overlay = loadWidget();
 
+let editingMode = false;
+
 const vdom = generateVirtualDOM(document.body);
 
 vdom.then(JSON.stringify).then(console.log);
@@ -153,6 +185,16 @@ vdom.then((vdom) => {
     return;
   }
 
-  makeEditable(document.body);
+  editButton.addEventListener("click", () => {
+    if (!editingMode) {
+      makeEditable(document.body);
+      editingMode = true;
+      overlay.innerText = "Editing Mode";
+    } else {
+      disableEditable(document.body);
+      editingMode = false;
+      overlay.innerText = "Exited editing";
+    }
+  });
   overlay.innerText = "Everything loaded!";
 });
