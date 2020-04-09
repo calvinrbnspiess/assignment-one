@@ -90,6 +90,12 @@ const printLayer = (vdom, layer = 1) => {
   children.forEach((node) => printLayer(node, layer + 1));
 };
 
+// strips of 'px' unit from string returned by window.getComputedStyle()
+const cssValueToNumber = (i) => +i.replace("px", "");
+
+const addToCSSValue = (value, increment) =>
+  `${cssValueToNumber(value) + increment}px`;
+
 // make an element and its children contenteditable
 const makeEditable = (element) => {
   if (isTextElement(element)) {
@@ -104,11 +110,10 @@ const makeEditable = (element) => {
 
     console.log(marginTop, marginLeft, marginBottom, marginRight);
 
-    const newMargin = `${+marginTop.replace("px", "") + 5}px ${
-      +marginRight.replace("px", "") + 5
-    }px ${+marginBottom.replace("px", "") + 5}px ${
-      +marginLeft.replace("px", "") + 5
-    }px`;
+    const newMargin = `${addToCSSValue(marginTop, 5)} ${addToCSSValue(
+      marginRight,
+      5
+    )} ${addToCSSValue(marginBottom, 5)} ${addToCSSValue(marginLeft, 5)}`;
 
     element.setAttribute(
       "style",
