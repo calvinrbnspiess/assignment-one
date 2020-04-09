@@ -12,48 +12,170 @@
 //  - Edit Mode Indicator ✅
 //  - Code cleanup, minor improvements
 
-const loadWidget = () => {
-  const container = document.createElement("div");
-
-  // shadow dom will prevent indexing in snapshot (except outer div)
-  container.attachShadow({ mode: "open" });
-
-  const style = document.createElement("link");
-
-  style.setAttribute("rel", "stylesheet");
-  style.setAttribute("type", "text/css");
-  style.setAttribute("href", "cms.css");
-  container.shadowRoot.append(style);
-
-  const cmsWidget = document.createElement("div");
-  cmsWidget.setAttribute("class", "cms-widget");
-
-  const overlay = document.createElement("div");
-  overlay.setAttribute("class", "overlay");
-  overlay.innerText = "Loading...";
-
-  const editButton = document.createElement("a");
-  editButton.setAttribute("type", "button");
-  editButton.setAttribute("class", "edit-button");
-
-  const pencilIcon = document.createElement("img");
-  pencilIcon.setAttribute("class", "edit-button--icon");
-  pencilIcon.setAttribute("src", "pencil.svg");
-
-  editButton.append(pencilIcon);
-
-  cmsWidget.append(overlay);
-  cmsWidget.append(editButton);
-
-  container.shadowRoot.append(cmsWidget);
-
-  document.body.appendChild(container);
-
-  window.overlay = overlay;
-  window.editButton = editButton;
-
-  return overlay;
+const EDITOR_STATE = {
+  COMPARING_SNAPSHOT: 0,
+  LOADING_SNAPSHOT: 1,
+  MISMATCHING_SNAPSHOT: 2,
+  NO_SNAPSHOT: 3,
+  IDLE: 4,
+  EDITING: 5,
+  SAVING_SNAPSHOT: 6,
 };
+
+class EditorControls {
+  constructor() {
+    const container = document.createElement("div");
+
+    // shadow dom will prevent indexing in snapshot (except outer div)
+    container.attachShadow({ mode: "open" });
+
+    container.shadowRoot.append(this.getStyleElement());
+
+    this.controlsElement = this.getOuterControlsElement();
+    this.toastElement = this.getToastElement();
+    this.editButton = this.getEditButton();
+
+    this.controlsElement.append(this.toastElement);
+    this.controlsElement.append(this.editButton);
+
+    container.shadowRoot.append(this.controlsElement);
+
+    document.body.appendChild(container);
+
+    this.setState(EDITOR_STATE.COMPARING_SNAPSHOT);
+  }
+
+  getStyleElement() {
+    const style = document.createElement("link");
+
+    style.setAttribute("rel", "stylesheet");
+    style.setAttribute("type", "text/css");
+    style.setAttribute("href", "cms.css");
+
+    return style;
+  }
+
+  getOuterControlsElement() {
+    const cmsWidget = document.createElement("div");
+    cmsWidget.setAttribute("class", "cms-widget");
+
+    return cmsWidget;
+  }
+
+  getToastElement() {
+    const toast = document.createElement("div");
+    toast.setAttribute("class", "toast");
+
+    return toast;
+  }
+
+  getEditButton() {
+    const editButton = document.createElement("a");
+    editButton.setAttribute("type", "button");
+    editButton.setAttribute("class", "edit-button");
+
+    const pencilIcon = document.createElement("img");
+    pencilIcon.setAttribute("class", "edit-button--icon");
+    pencilIcon.setAttribute("src", "pencil.svg");
+
+    editButton.append(pencilIcon);
+
+    editButton.addEventListener("click", () => {
+      console.log("clicky");
+      console.log(this.state);
+      if (this.state === EDITOR_STATE.IDLE) {
+        this.setState(EDITOR_STATE.EDITING);
+      } else if (this.state === EDITOR_STATE.EDITING) {
+        this.setState(EDITOR_STATE.IDLE);
+      } else if (this.state === EDITOR_STATE.SAVING_SNAPSHOT) {
+        this.toastElement.innerText = "I'm busy.";
+      }
+    });
+
+    return editButton;
+  }
+
+  async setState(state) {
+    console.log(state);
+
+    let priorState = this.state;
+    this.state = state;
+
+    switch (state) {
+      case EDITOR_STATE.COMPARING_SNAPSHOT:
+        this.vdom = generateVirtualDOM(document.body);
+
+        // this.vdom.then(JSON.stringify).then(console.log);
+        // this.vdom.then((vdom) => printLayer(vdom));
+        this.vdom.then((vdom) => {
+          this.snapshot = JSON.stringify(vdomFilterText(vdom));
+          this.prev_snapshot = localStorage.getItem("snapshot");
+
+          if (this.prev_snapshot === null) {
+            this.setState(EDITOR_STATE.NO_SNAPSHOT);
+          } else if (
+            this.snapshot ===
+            JSON.stringify(vdomFilterText(JSON.parse(this.prev_snapshot)))
+          ) {
+            this.setState(EDITOR_STATE.LOADING_SNAPSHOT);
+          } else {
+            this.setState(EDITOR_STATE.MISMATCHING_SNAPSHOT);
+          }
+        });
+        break;
+      case EDITOR_STATE.NO_SNAPSHOT:
+        this.toastElement.innerText = "No prior snapshot";
+        localStorage.setItem("snapshot", JSON.stringify(this.vdom));
+        this.setState(EDITOR_STATE.IDLE);
+        break;
+      case EDITOR_STATE.LOADING_SNAPSHOT:
+        console.log("matching");
+        this.toastElement.innerText = "Snapshot is matching.";
+        readSnapshot(JSON.parse(this.prev_snapshot), document.body);
+        this.setState(EDITOR_STATE.IDLE);
+        console.log("idle");
+        break;
+      case EDITOR_STATE.MISMATCHING_SNAPSHOT:
+        this.toastElement.innerText = "Mismatching snapshot.";
+        break;
+      case EDITOR_STATE.IDLE:
+        console.log("this: " + this.state);
+        if (priorState === EDITOR_STATE.EDITING) {
+          disableEditable(document.body);
+          this.toastElement.innerText = "Exited.";
+        } else {
+          this.toastElement.innerText = "Click the button to edit this page.";
+        }
+        break;
+      case EDITOR_STATE.EDITING:
+        console.log("editing");
+        if (priorState === EDITOR_STATE.SAVING_SNAPSHOT) {
+          this.toastElement.innerText = "Saved changes.";
+        } else {
+          makeEditable(document.body, (event) => {
+            console.log(
+              `input event fired on ${event.target}. Value is: ${event.target.innerText}`
+            );
+            this.setState(EDITOR_STATE.SAVING_SNAPSHOT);
+          });
+          this.toastElement.innerText = "Edit Mode";
+        }
+        break;
+      case EDITOR_STATE.SAVING_SNAPSHOT:
+        console.log("saving");
+        this.toastElement.innerText = "Saving ...";
+
+        this.vdom = await generateVirtualDOM(document.body);
+        console.log(this.vdom);
+        localStorage.setItem("snapshot", JSON.stringify(this.vdom));
+
+        this.setState(EDITOR_STATE.EDITING);
+
+        break;
+    }
+    console.log("setting state: " + state);
+  }
+}
 
 const isTextElement = (element) =>
   element.children.length === 0 && !element.shadowRoot;
@@ -97,7 +219,7 @@ const addToCSSValue = (value, increment) =>
   `${cssValueToNumber(value) + increment}px`;
 
 // make an element and its children contenteditable
-const makeEditable = (element) => {
+const makeEditable = (element, callback) => {
   if (isTextElement(element)) {
     element.setAttribute("contenteditable", true);
 
@@ -108,8 +230,6 @@ const makeEditable = (element) => {
       marginLeft,
     } = window.getComputedStyle(element);
 
-    console.log(marginTop, marginLeft, marginBottom, marginRight);
-
     const newMargin = `${addToCSSValue(marginTop, 5)} ${addToCSSValue(
       marginRight,
       5
@@ -119,20 +239,13 @@ const makeEditable = (element) => {
       "style",
       `outline: 2px dashed grey; margin: ${newMargin}; transition: margin .2s ease`
     );
-    element.addEventListener("input", async (event) => {
-      window.overlay.innerText = "Saving ...";
-      console.log(
-        `input event fired on ${event.target}. Value is: ${event.target.innerText}`
-      );
-      const vdom = await generateVirtualDOM(document.body);
-      console.log(vdom);
-      localStorage.setItem("snapshot", JSON.stringify(vdom));
-      window.overlay.innerText = "Saved.";
-    });
+    element.addEventListener("input", callback);
     return;
   }
 
-  Array.from(element.children).forEach(makeEditable);
+  Array.from(element.children).forEach((children) =>
+    makeEditable(children, callback)
+  );
 };
 
 const disableEditable = (element) => {
@@ -165,41 +278,4 @@ const vdomFilterText = (vdom) => {
   return { [tagName]: children.map(vdomFilterText) };
 };
 
-const overlay = loadWidget();
-
-let editingMode = false;
-
-const vdom = generateVirtualDOM(document.body);
-
-vdom.then(JSON.stringify).then(console.log);
-vdom.then((vdom) => printLayer(vdom));
-vdom.then((vdom) => {
-  const snapshot = JSON.stringify(vdomFilterText(vdom));
-  const prev_snapshot = localStorage.getItem("snapshot");
-  if (prev_snapshot === null) {
-    overlay.innerText = "Creating new snapshot ...";
-    localStorage.setItem("snapshot", JSON.stringify(vdom));
-  } else if (
-    snapshot === JSON.stringify(vdomFilterText(JSON.parse(prev_snapshot)))
-  ) {
-    overlay.innerText = "Snapshot is matching.";
-
-    readSnapshot(JSON.parse(prev_snapshot), document.body);
-  } else {
-    overlay.innerText = "Site Structure does not match snapshot.";
-    return;
-  }
-
-  editButton.addEventListener("click", () => {
-    if (!editingMode) {
-      makeEditable(document.body);
-      editingMode = true;
-      overlay.innerText = "Editing Mode";
-    } else {
-      disableEditable(document.body);
-      editingMode = false;
-      overlay.innerText = "Exited editing";
-    }
-  });
-  overlay.innerText = "Everything loaded!";
-});
+new EditorControls();

@@ -28,7 +28,7 @@
   animation-delay: 200ms;
 }
 
-.overlay {
+.toast {
   border-radius: 5px;
   background-color: white;
   padding: 15px;
