@@ -7,7 +7,7 @@
 //  - Add some sort of "edit"-button that will give (✅) each dom-element the attribute contenteditable="true" (it will not work well enough to give it just to the body) (✅)
 //  - use the structure and some events to save changes to the LocalStorage ✅
 //  - On Revisit: Load from LocalStorage if snapshot matches the structure ✅
-//  - Add key handler for ESC to exit edit mode
+//  - Add key handler for ESC to exit edit mode ✅
 //  - Add visual border to editable elements instead of ugly outline :) (not a necessary feature at all) ✅
 //  - Edit Mode Indicator ✅
 //  - Code cleanup, minor improvements ✅
@@ -21,6 +21,8 @@ const EDITOR_STATE = {
   EDITING: 5,
   SAVING_SNAPSHOT: 6,
 };
+
+const KEY_ESCAPE = 27;
 
 class EditorControls {
   constructor() {
@@ -41,6 +43,11 @@ class EditorControls {
     container.shadowRoot.append(this.controlsElement);
 
     document.body.appendChild(container);
+    document.body.addEventListener("keydown", ({ keyCode }) => {
+      if (keyCode === KEY_ESCAPE && this.state === EDITOR_STATE.EDITING) {
+        this.setState(EDITOR_STATE.IDLE);
+      }
+    });
 
     this.setState(EDITOR_STATE.COMPARING_SNAPSHOT);
   }
