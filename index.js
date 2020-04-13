@@ -134,7 +134,6 @@ class EditorControls {
         break;
       case EDITOR_STATE.NO_SNAPSHOT:
         this.setToast("No prior snapshot");
-        console.log(this.vdom);
         localStorage.setItem("snapshot", JSON.stringify(this.vdom));
         this.setState(EDITOR_STATE.IDLE);
         break;
