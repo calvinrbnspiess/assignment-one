@@ -10,7 +10,7 @@
 //  - Add key handler for ESC to exit edit mode
 //  - Add visual border to editable elements instead of ugly outline :) (not a necessary feature at all) ✅
 //  - Edit Mode Indicator ✅
-//  - Code cleanup, minor improvements
+//  - Code cleanup, minor improvements ✅
 
 const EDITOR_STATE = {
   COMPARING_SNAPSHOT: 0,
@@ -81,33 +81,35 @@ class EditorControls {
     editButton.append(pencilIcon);
 
     editButton.addEventListener("click", () => {
-      console.log("clicky");
-      console.log(this.state);
       if (this.state === EDITOR_STATE.IDLE) {
         this.setState(EDITOR_STATE.EDITING);
       } else if (this.state === EDITOR_STATE.EDITING) {
         this.setState(EDITOR_STATE.IDLE);
       } else if (this.state === EDITOR_STATE.SAVING_SNAPSHOT) {
-        this.toastElement.innerText = "I'm busy.";
+        this.setToast("I'm busy");
       }
     });
 
     return editButton;
   }
 
-  async setState(state) {
-    console.log(state);
+  setToast(message) {
+    this.toastElement.innerText = message;
+  }
 
+  async setState(state) {
     let priorState = this.state;
     this.state = state;
 
+    console.log("setting state: " + this.state);
+
     switch (state) {
       case EDITOR_STATE.COMPARING_SNAPSHOT:
-        this.vdom = generateVirtualDOM(document.body);
-
-        // this.vdom.then(JSON.stringify).then(console.log);
-        // this.vdom.then((vdom) => printLayer(vdom));
-        this.vdom.then((vdom) => {
+        const vdom = generateVirtualDOM(document.body);
+        vdom.then(JSON.stringify).then(console.log);
+        vdom.then((vdom) => printLayer(vdom));
+        vdom.then((vdom) => {
+          this.vdom = vdom;
           this.snapshot = JSON.stringify(vdomFilterText(vdom));
           this.prev_snapshot = localStorage.getItem("snapshot");
 
@@ -124,33 +126,30 @@ class EditorControls {
         });
         break;
       case EDITOR_STATE.NO_SNAPSHOT:
-        this.toastElement.innerText = "No prior snapshot";
+        this.setToast("No prior snapshot");
+        console.log(this.vdom);
         localStorage.setItem("snapshot", JSON.stringify(this.vdom));
         this.setState(EDITOR_STATE.IDLE);
         break;
       case EDITOR_STATE.LOADING_SNAPSHOT:
-        console.log("matching");
-        this.toastElement.innerText = "Snapshot is matching.";
+        this.setToast("Snapshot is matching.");
         readSnapshot(JSON.parse(this.prev_snapshot), document.body);
         this.setState(EDITOR_STATE.IDLE);
-        console.log("idle");
         break;
       case EDITOR_STATE.MISMATCHING_SNAPSHOT:
-        this.toastElement.innerText = "Mismatching snapshot.";
+        this.setToast("Mismatching snapshot.");
         break;
       case EDITOR_STATE.IDLE:
-        console.log("this: " + this.state);
         if (priorState === EDITOR_STATE.EDITING) {
           disableEditable(document.body);
-          this.toastElement.innerText = "Exited.";
+          this.setToast("Exited.");
         } else {
-          this.toastElement.innerText = "Click the button to edit this page.";
+          this.setToast("Click the button to edit this page.");
         }
         break;
       case EDITOR_STATE.EDITING:
-        console.log("editing");
         if (priorState === EDITOR_STATE.SAVING_SNAPSHOT) {
-          this.toastElement.innerText = "Saved changes.";
+          this.setToast("Saved changes.");
         } else {
           makeEditable(document.body, (event) => {
             console.log(
@@ -158,22 +157,19 @@ class EditorControls {
             );
             this.setState(EDITOR_STATE.SAVING_SNAPSHOT);
           });
-          this.toastElement.innerText = "Edit Mode";
+          this.setToast("Edit mode");
         }
         break;
       case EDITOR_STATE.SAVING_SNAPSHOT:
-        console.log("saving");
-        this.toastElement.innerText = "Saving ...";
+        this.setToast("Saving...");
 
         this.vdom = await generateVirtualDOM(document.body);
-        console.log(this.vdom);
         localStorage.setItem("snapshot", JSON.stringify(this.vdom));
 
         this.setState(EDITOR_STATE.EDITING);
 
         break;
     }
-    console.log("setting state: " + state);
   }
 }
 
@@ -263,8 +259,6 @@ const readSnapshot = (vdom, element) => {
   let text = vdom["text"];
 
   if (text !== undefined) {
-    console.log(element);
-    console.log("Text is not undefined: " + text);
     element.innerText = text;
   }
 
